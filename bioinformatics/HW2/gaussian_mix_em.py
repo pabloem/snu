@@ -14,7 +14,7 @@ samples = int(sys.argv[1])
 means = [float(m) for i,m in enumerate(sys.argv) if i % 2 == 0 and i >= 2]
 variances = [float(m) for i,m in enumerate(sys.argv) if i % 2 == 1 and i >= 2]
 dists = len(means)
-iterations = 10
+iterations = 500
 
 # assert(len(means) == len(variances))
 
@@ -55,7 +55,7 @@ def M_step(resps,data,nodists):
         t_mean = m_up/m_down
         res['means'].append(t_mean)
 
-        v_up = sum([resps[j][i]*pow(data[i] - t_mean,2)])
+        v_up = sum([resps[j][i]*pow(data[i] - t_mean,2) for i in range(len(data))])
         v_down = m_down
         t_var = v_up/v_down
         res['variances'].append(t_var)
@@ -64,15 +64,23 @@ def M_step(resps,data,nodists):
 
     return res
 
+def max_error_rate(old,new):
+    er = max([abs(old[i]-new[i])/old[i] for i in range(len(old))])
+    return er
+    
 for i in range(iterations):
     resps = E_step(data,means,variances,pi)
-    print(resps)
     nps = M_step(resps,data,dists)
-    print(nps)
+    err = max(max_error_rate(means,nps['means']),
+              max_error_rate(variances,nps['variances']))
     means = nps['means']
     variances = nps['variances']
+    if i < 2:
+        print("Iteration "+str(i+1)+". Means: "+str(means)+" | Vars: "+str(variances))
     pi = nps['pis']
+    if(err < 0.000001): break
 
-print(pi)
-print(means)
-print(variances)
+print("Ran a total of "+str(i)+" iterations.")
+print("Pi: "+str(pi))
+print("Means: "+str(means))
+print("Vars: "+str(variances))

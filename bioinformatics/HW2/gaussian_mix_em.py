@@ -3,7 +3,7 @@ import sys
 from numpy.random import normal, sample, choice
 from scipy.stats import norm
 from numpy import var
-from math import sqrt
+from math import sqrt, log
 from matplotlib import pyplot as plt
 
 if len(sys.argv) < 6 or len(sys.argv) % 2 == 1:
@@ -23,20 +23,26 @@ for i, m in enumerate(means):
     [data.append(normal(m,sqrt(variances[i]))) for _ in range(samples)]
 
 print("Generated "+str(len(data))+" data points.")
-"""
 f1 = plt.figure()
 plt.hist(data,bins=50)
 f1.show()
-"""
 
-em_means = [choice(data) for _ in range(dists)]
-em_vars = [var(choice(data,len(data)//dists)) for _ in range(dists)]
-pi = [1.0/dists for _ in range(dists)]
+def generate_initial(data):
+    means = [choice(data) for _ in range(dists)]
+    variances = [var(choice(data,2)) for _ in range(dists)]
+    pi = [1.0/dists for _ in range(dists)]
+
+    return means, variances, pi
+
+em_means, em_vars, pi = generate_initial(data)
 #sPi = sum(pi)
 #pi = [i/sPi for i in pi]
 print("Randomly estimated means: "+str(em_means))
 print("Variances: "+str(em_vars))
 print("Contribution: "+str(pi))
+print("Data: "+str(data))
+
+print("Starting EM iterations...\n")
 
 def E_step(data,means,variances,pis):
     resps = [[] for _ in means]
@@ -60,27 +66,41 @@ def M_step(resps,data,nodists):
         t_var = v_up/v_down
         res['variances'].append(t_var)
 
-        res['pis'].append(1.0/nodists)
+        res['pis'].append(sum(resps[j])/len(data))
 
     return res
+
+def log_likelihood(data,pis,means,variances):
+    ll = sum([log(pis[j]*norm.pdf(elm,loc=means[j],scale=variances[j]) or 1) for elm in data for j in range(len(pis))
+              if pis[j] != 0 if variances[j] != 0])
+    return ll
 
 def max_error_rate(old,new):
     er = max([abs(old[i]-new[i])/old[i] for i in range(len(old))])
     return er
-    
-for i in range(iterations):
-    resps = E_step(data,means,variances,pi)
-    nps = M_step(resps,data,dists)
-    err = max(max_error_rate(means,nps['means']),
-              max_error_rate(variances,nps['variances']))
+
+olgl = None
+i = 0
+while i < iterations:
+    lgl = log_likelihood(data,pi,means,variances)
+    try:
+        resps = E_step(data,means,variances,pi)
+        nps = M_step(resps,data,dists)
+    except:
+        print("Found error...")
+        means, variances, pi = generate_initial(data)
+        i = 0
+        continue
     means = nps['means']
     variances = nps['variances']
-    if i < 2:
-        print("Iteration "+str(i+1)+". Means: "+str(means)+" | Vars: "+str(variances))
+    i += 1
+    print("Iteration "+str(i)+" LogL: "+str(lgl)+".\nMean: "+str(means)+"\nVars: "+str(variances)+"\nPis: "+str(pi))
+    print("Membership weights: \n"+str(resps)+"\n")
     pi = nps['pis']
-    if(err < 0.000001): break
+    if olgl is not None and abs((lgl-olgl)/olgl) < 0.00001: break
+    olgl = lgl
 
-print("Ran a total of "+str(i)+" iterations.")
+print("Ran a total of "+str(i+1)+" iterations.")
 print("Pi: "+str(pi))
 print("Means: "+str(means))
 print("Vars: "+str(variances))
